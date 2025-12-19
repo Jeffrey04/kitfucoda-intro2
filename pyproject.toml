@@ -1,0 +1,18 @@
+[project]
+name = "kitfucoda-intro2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "frozendict>=2.4.7",
+    "pygame>=2.6.1",
+    "structlog>=25.5.0",
+]
+
+[project.scripts]
+kitfucoda-intro2 = "kitfucoda_intro2:main"
+
+[build-system]
+requires = ["uv_build>=0.9.17,<0.10.0"]
+build-backend = "uv_build"
