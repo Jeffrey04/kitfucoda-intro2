@@ -196,7 +196,7 @@ def add_event_listener(
 async def init_application(
     application: Application,
     user_events: type[Enum] | None,
-    *args: tuple[Any, Callable],
+    *listeners: tuple[Any, Callable],
 ) -> Application:
     application = thread_first(
         application,
@@ -208,7 +208,9 @@ async def init_application(
         listeners=await listener_add_list(
             frozendict(),
             None,
-            *tuple((application.events[event], handler) for event, handler in args),  # ty:ignore[invalid-argument-type]
+            *tuple(
+                (application.events[event], handler) for event, handler in listeners
+            ),  # ty:ignore[invalid-argument-type]
         ),
     )
 
