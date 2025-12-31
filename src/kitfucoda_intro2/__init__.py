@@ -1,6 +1,6 @@
 import asyncio
 
-from kitfucoda_intro2.animation import run
+from kitfucoda_intro2.animation2 import run
 
 
 def main() -> None:

@@ -1,6 +1,6 @@
 import asyncio
 import signal
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from time import monotonic_ns
 from typing import Any
 
@@ -71,7 +71,7 @@ async def char_update(application: Application, elem: CharElem, alpha: int) -> C
 @dataclass
 class FadeOutHandler:
     duration: int
-    start_time: int
+    start_time: int = field(default_factory=lambda: monotonic_ns() // 1_000_000)
 
     async def __call__(
         self,
@@ -83,8 +83,8 @@ class FadeOutHandler:
     ) -> None:
         current = monotonic_ns() // 1_000_000
         elapsed = current - self.start_time
-        progress = elapsed / self.duration
-        alpha = int(max(255 * (1.0 - progress), 0))
+        remaining = 1.0 - (elapsed / self.duration)
+        alpha = int(max(255 * remaining, 0))
 
         elem = await char_update(application, target, alpha)
 
@@ -108,7 +108,7 @@ async def fade_out(application: Application, elem: CharElem, duration: int) -> C
     return await add_event_listener(
         elem,
         SystemEvent.FRAME_NEXT.value,
-        FadeOutHandler(duration, monotonic_ns() // 1_000_000),
+        FadeOutHandler(duration),
     )  # type: ignore
 
 
@@ -117,7 +117,7 @@ async def handle_click(
 ) -> None:
     elem = await fade_out(
         target,
-        await char_create(target, "a", 20, (255, 255, 0), 255, event.pos),
+        await char_create(target, "a", 150, (255, 255, 0), 255, event.pos),
         1000,
     )
 
@@ -140,7 +140,7 @@ async def handle_init(
 
 async def setup(logger: BoundLogger) -> Application:
     application = await add_event_listeners(
-        Application(screen=pygame.display.set_mode((500, 500))),
+        Application(screen=pygame.display.set_mode((1000, 500))),
         (SystemEvent.INIT.value, handle_init),
     )
 

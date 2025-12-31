@@ -200,17 +200,6 @@ async def events_dispatch(
                     logger,
                 )
 
-            # case custom if custom in (
-            #    SystemEvent.FRAME_NEXT.value,
-            #    SystemEvent.REFRESH.value,
-            # ):
-            #    await dispatch_element_handler2(
-            #        tuple(application.elements.values()),
-            #        event,
-            #        application,
-            #        logger,
-            #    )
-
             case custom if custom >= pygame.USEREVENT:
                 dispatch_application_handler(application, event, logger)
                 dispatch_element_handler(
@@ -236,7 +225,7 @@ async def coroutine_loop(
 
 
 async def display_update(
-    screen_update: asyncio.Queue, clock: pygame.time.Clock
+    screen_update: asyncio.Queue, clock: pygame.time.Clock, logger: BoundLogger
 ) -> None:
     clock.tick(60)
 
@@ -249,6 +238,8 @@ async def display_update(
     pygame.display.update(updates)
 
     pygame.event.post(pygame.event.Event(SystemEvent.FRAME_NEXT.value))
+
+    asyncio.create_task(logger.ainfo("framerate", fps=clock.get_fps()))
 
 
 def application_get_field(application: Application, field: ApplicationDataField) -> str:
@@ -408,9 +399,7 @@ async def main_loop(
     tasks.append(
         asyncio.create_task(
             coroutine_loop(
-                display_update,
-                application.delta_screen,
-                application.clock,
+                display_update, application.delta_screen, application.clock, logger
             )
         )
     )
