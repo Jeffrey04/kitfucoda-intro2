@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from time import monotonic_ns
 
@@ -15,8 +16,7 @@ from framework.game import (
     Element,
     SystemEvent,
     add_event_listener,
-    application_init,
-    listener_add_list,
+    init_application,
     queue_element,
     remove_element,
     update_element,
@@ -82,30 +82,23 @@ class FadeOutHandler:
         remaining = 1.0 - (elapsed / self.duration)
         alpha = int(max(255 * remaining, 0))
 
-        future_elem = execute_sync(mailbox, None)(char_update, target, alpha)
-
-        queue_element(mailbox, await future_elem)  # ty:ignore[invalid-argument-type]
-
-        if alpha > 0:
-            update_element(mailbox, await future_elem)  # ty:ignore[invalid-argument-type]
-        else:
-            remove_element(mailbox, await future_elem)  # ty:ignore[invalid-argument-type]
+        thread_last(
+            await execute_sync(mailbox, None)(char_update, target, alpha),
+            curry(queue_element)(mailbox),
+            curry(update_element)(mailbox)
+            if alpha > 0
+            else curry(remove_element)(mailbox),
+        )
 
 
 async def application_setup(
     exit_event: asyncio.Event,
     logger: BoundLogger,
 ) -> Application:
-    application = await application_init(
-        Application(pygame.display.set_mode(size=(1000, 500)), exit_event)
-    )
-    application = replace(
-        application,
-        listeners=await listener_add_list(
-            application.listeners,
-            None,
-            (application.events[SystemEvent.INIT], handle_init),  # ty:ignore[invalid-argument-type]
-        ),
+    application = await init_application(
+        Application(pygame.display.set_mode(size=(1000, 500)), exit_event),
+        None,
+        (SystemEvent.INIT, handle_init),
     )
 
     return application
@@ -127,15 +120,14 @@ async def handle_init(
 def fade_out(
     mailbox: asyncio.Queue[SetRequest[Application] | ExecuteRequest[Application]],
     application: Application,
-    elem: CharElem,
     duration: int,
-) -> CharElem:
-    return add_event_listener(
+) -> Callable[[CharElem], CharElem]:
+    return lambda elem: add_event_listener(
         mailbox,
         elem,  # ty:ignore[invalid-argument-type]
         application.events[SystemEvent.FRAME_NEXT],  # ty:ignore[invalid-argument-type]
         FadeOutHandler(duration),
-    )  # ty:ignore[invalid-return-type]
+    )
 
 
 async def handle_click(
@@ -144,14 +136,12 @@ async def handle_click(
     mailbox: asyncio.Queue[SetRequest[Application] | ExecuteRequest[Application]],
     _logger: BoundLogger,
 ) -> None:
-    elem = fade_out(
-        mailbox,
-        application,
+    thread_last(
         await char_create(application, "a", 150, (255, 255, 0), 255, event.pos),
-        1000,
+        fade_out(mailbox, application, 1000),
+        curry(queue_element)(mailbox),
+        curry(update_element)(mailbox),
     )
-
-    thread_last(elem, curry(queue_element)(mailbox), curry(update_element)(mailbox))
 
 
 async def run() -> None:

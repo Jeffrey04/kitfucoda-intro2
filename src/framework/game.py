@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 import pygame
 from frozendict import frozendict
 from structlog.stdlib import BoundLogger
+from toolz.functoolz import curry, thread_first
 
 from framework.actor import ExecuteRequest, SetRequest, execute, set_
 from framework.actor import run as actor_run
@@ -70,10 +71,6 @@ async def run(
     await exit_event.wait()
 
 
-async def application_init(application: Application) -> Application:
-    return await event_register_system(application)
-
-
 async def display_update_queue(
     display_update: asyncio.Queue[pygame.Rect], elem: type[Element]
 ) -> None:
@@ -92,19 +89,22 @@ async def event_post(
         )
 
 
-async def event_register(
+def event_register(application: Application, events: type[Enum] | None) -> Application:
+    result = application
+
+    if not events:
+        return result
+
+    for event in events:
+        result = replace(result, events=event_register_type(result.events, event))
+
+    return result
+
+
+def event_register_type(
     events: frozendict[Any, int], event: Any
 ) -> frozendict[Any, int]:
     return events.set(event, pygame.event.custom_type())  # ty:ignore[no-matching-overload]
-
-
-async def event_register_system(application: Application) -> Application:
-    for event in SystemEvent:
-        application = replace(
-            application, events=await event_register(application.events, event)
-        )
-
-    return application
 
 
 async def event_quit(exit_event: asyncio.Event) -> None:
@@ -191,6 +191,28 @@ def add_event_listener(
     set_(mailbox, "listeners")(listener_add, target, event_type, listener)
 
     return target
+
+
+async def init_application(
+    application: Application,
+    user_events: type[Enum] | None,
+    *args: tuple[Any, Callable],
+) -> Application:
+    application = thread_first(
+        application,
+        curry(event_register)(events=SystemEvent),
+        curry(event_register)(events=user_events),
+    )
+    application = replace(
+        application,
+        listeners=await listener_add_list(
+            frozendict(),
+            None,
+            *tuple((application.events[event], handler) for event, handler in args),  # ty:ignore[invalid-argument-type]
+        ),
+    )
+
+    return application
 
 
 def remove_element(
